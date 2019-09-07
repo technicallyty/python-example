@@ -1,60 +1,65 @@
 from tkinter import *
 from tkinter import filedialog
 from tkinter import font
+from tkinter.messagebox import showinfo
 import socket
 from pathlib import Path
 from xml.dom import minidom
 import os
-#dsdfasdf#sdf
+from shutil import copyfile
 
+
+# noinspection PyStatementEffect
 class Window(Frame):
     # Constructor//Globals
     def __init__(self, master=None):
         Frame.__init__(self, master)
         self.master = master
         self.window()
-        self.MainFile = None
+        self.myFile = None
+        self.MainFile = open("xmltempdata.xml", 'w')
         self.SOCK = None
         self.PlanInfo = []
         self.resultX = None
+        self.Connected = False
 
-    # window objects
+    # main window objects
     def window(self):
         self.master.title("Tyler's App")
-        self.pack(fill=BOTH, expand=1)
+        self.pack(fill=BOTH, expand=True)
 
-        # SAVE
-        saveButton = Button(self, text="Save As", command=self.saveas)
-        saveButton.place(x=0, y=50)
-        self.lbl = Label(text="File path: ")
-        self.lbl.place(x=0, y=0)
-
-        # CONNECTION BUTTON
+        # connect button, triggers Connect function
         self.connection = StringVar()
         self.connection.set("Not Connected")
         self.lbl2 = Label(text=self.connection.get())
-        self.lbl2.place(x=245, y=375)
+        self.lbl2.place(x=175, y=15)
         connectButton = Button(self, text="Connect", command=self.Connect)
-        connectButton.place(x=250, y=400)
+        connectButton.place(x=175, y=45)
 
-        # PLAN ID INFO
+        # save as button - triggers save as
+        saveButton = Button(self, text="Save XML", command=self.saveas)
+        saveButton.place(x=10, y=450)
+        self.lbl = Label(text="File path: ")
+        self.lbl.place(x=100, y=455)
+
+        # retrieve data from verisurf, triggers getPlans
         getPlanInfo = Button(self, text="Retrieve Verisurf Info", command=self.getPlans)
-        getPlanInfo.place(x=0, y=150)
-
-        # Steps
-        steps = Label(text="1. Connect \n 2. SaveAs \n 3. Get Verisurf Info")
-        steps.place(x=300, y=25)
+        getPlanInfo.place(x=145, y=150)
 
     # Creates XML file to write Verisurf Responses
     def saveas(self):
-        files = [('XML Files', '*.xml')]
-        file = filedialog.asksaveasfile(mode='a', filetypes=files, defaultextension=files)
-        self.lbl.configure(text="File path: " + file.name)
-        fileName = Path(file.name).stem
-        fileName = (fileName + ".xml")
-        myFile = open(file.name, "w+")
-        myFile.write(self.tm)
-        self.MainFile = myFile
+        fileTypes = [('XML Files', '*.xml')]
+        file = filedialog.asksaveasfile(mode='a', filetypes=fileTypes, defaultextension=fileTypes)
+        try:
+            self.lbl.configure(text="File path: " + file.name)
+            self.myFile = open(file.name, "w+")
+            self.MainFile.close()
+            self.myFile.close()
+            copyfile('xmltempdata.xml', file.name)
+            self.myFile = open(file.name, "a")
+        except AttributeError:
+            None
+            # do nothing, file was not saved.
 
     # Connects to Verisurf.
     def Connect(self):
@@ -67,43 +72,55 @@ class Window(Frame):
             tm = s.recv(1024)
             self.tm = tm.decode('ascii')
             self.lbl2.configure(text="Connected!")
-        except:
+            self.writeFiles(self.tm)
+            self.Connected = True
+        except ConnectionError:
             self.lbl2.configure(text="Unable to Connect")
+            self.Connected = False
 
-    #testsdfsdf
     # Asks verisurf for plan names. Creates drop down box to select each plan
     def getPlans(self):
-        sender = "<Inspect_Plan_List />\n"
-        received = self.sendCommand(sender)
-        self.writeFiles(received)
-        self.Plans = self.ParseXML(received, "plan", "id")
+        try:
+            sender = "<Inspect_Plan_List />\n"
+            received = self.sendCommand(sender)
+            self.writeFiles(received)
+            self.Plans = self.ParseXML(received, "plan", "id")
 
-        ##CREATE DROP DOWN##
-        var = StringVar()
-        var.set("Select Plan")
-        menu = OptionMenu(self, var, *self.Plans, command=self.Working)
-        menu.config(width=10)
-        menu.place(x=0, y=200)
+            # CREATE DROP DOWN
+            var = StringVar()
+            var.set("Select Plan")
+            menu = OptionMenu(self, var, *self.Plans, command=self.Working)
+            menu.config(width=10)
+            menu.place(x=148, y=200)
+        except:
+            # checks if connection error, or if project empty
+            if self.Connected == False:
+                showinfo("Connection Error", "You are not connected to Verisurf!")
+            else:
+                showinfo("No data", "Your verisurf project is empty!")
 
-    # Updates plan selection
+    # Required tkinter function to detect selection
     def Working(self, planNum):
         self.planDetails(self.Plans.index(planNum))
 
     # Gets plan details - objects in plan
     def planDetails(self, planNumber):
-        send = ("<Inspect_Plan_Load id=\"" + str(planNumber) + "\" />\n")
-        self.SOCK.send(send.encode('ascii'))
-        temp = self.SOCK.recv(10000)
-        send = "<Inspect_Plan_Info id = \"" + str(planNumber) + "\" />\n"
-        received = self.sendCommand(send)
-        self.writeFiles(received)
-        self.parsedList = self.ParseXML(received, "plan_object", "object_id")
-        ##CREATE DROP DOWN##
-        var = StringVar()
-        var.set("Select Object")
-        menu = OptionMenu(self, var, *self.parsedList, command=self.ObjectSelect)
-        menu.config(width=10)
-        menu.place(x=0, y=250)
+        try:
+            send = ("<Inspect_Plan_Load id=\"" + str(planNumber) + "\" />\n")
+            self.SOCK.send(send.encode('ascii'))
+            temp = self.SOCK.recv(10000)
+            send = "<Inspect_Plan_Info id = \"" + str(planNumber) + "\" />\n"
+            received = self.sendCommand(send)
+            self.writeFiles(received)
+            self.parsedList = self.ParseXML(received, "plan_object", "object_id")
+            # CREATE DROP DOWN
+            var = StringVar()
+            var.set("Select Object")
+            menu = OptionMenu(self, var, *self.parsedList, command=self.ObjectSelect)
+            menu.config(width=10)
+            menu.place(x=148, y=250)
+        except:
+            showinfo("No data", "Selected plan has no objects.")
 
     # Tkinter function needed to detect when dropdown has changed
     def ObjectSelect(self, num):
@@ -115,7 +132,7 @@ class Window(Frame):
         self.writeFiles(received)
         self.objectList = self.ParseXML(received, "property", "none")
         resultsbtn = Button(self, text="Results", command=self.showResults)
-        resultsbtn.place(x=0, y=300)
+        resultsbtn.place(x=160, y=300)
         print(self.objectList)
 
     def showResults(self):
@@ -123,6 +140,7 @@ class Window(Frame):
         self.top = Toplevel(master=None, height=750, width=750, relief="sunken")
         self.top.title("Results")
 
+        # Default headers for information
         self.actual = Label(self.top, text="Act", font=self.font)
         self.actual.grid(row=0, column=1)
         self.meas = Label(self.top, text="Meas", font=self.font)
@@ -134,30 +152,30 @@ class Window(Frame):
         outTol = "red"
 
         rows = 1
+        # generates values to display
         for items in self.objectList:
             nameLabel = Label(self.top, text=items['name'], font=self.font)
-            nameLabel.grid(row=rows, column=0, padx=100, pady=20, sticky=W)
+            nameLabel.grid(row=rows, column=0, padx=40, pady=20, sticky=W)
             nomLabel = Label(self.top, text="{:.3f}".format(items['nominal']), font=self.font, fg=inTol)
             nomLabel.grid(row=rows, column=1, padx=100, pady=20, sticky=W)
             devLabel = Label(self.top, text="{:.3f}".format(items['deviation']), font=self.font, fg=inTol)
             devLabel.grid(row=rows, column=3, padx=100, pady=20, sticky=W)
 
+            #Logic to determine if OOT. changes to red if so
             if items['deviation'] > items['tolmax'] or items['deviation'] < items['tolmin']:
                 measLabel = Label(self.top, text="{:.3f}".format(items['measured']), font=self.font, fg=outTol)
-                measLabel.grid(row=rows, column=2, padx=100, pady=20, sticky=W)
             else:
                 measLabel = Label(self.top, text="{:.3f}".format(items['measured']), font=self.font, fg=inTol)
-                measLabel.grid(row=rows, column=2, padx=100, pady=20, sticky=W)
+            measLabel.grid(row=rows, column=2, padx=100, pady=20, sticky=W)
 
             rows += 1
 
         self.update()
         self.top.bind('<Configure>', self.resize)
 
-    # event that detects when window has changed. Adjusts font size to fit to window
+    # handles window resizing event. adjusts font size accordingly.
     def resize(self, event):
         size = len(self.objectList) * 13
-
         self.font['size'] = int(((self.top.winfo_height() + self.top.winfo_width()) / size))
 
     # Sends commands to Verisurf, returns message
@@ -171,7 +189,11 @@ class Window(Frame):
 
     # Writes Verisurf responses to global file
     def writeFiles(self, st):
-        self.MainFile.write(st)
+        # Try to write to the saveas file, otherwise, temp file.
+        try:
+            self.myFile.write(st)
+        except:
+            self.MainFile.write(st)
 
     # Parses XML response from Verisurf
     def ParseXML(self, data, tagname, id):
@@ -204,6 +226,7 @@ class Window(Frame):
                 list.append(dict)
 
         tempFile.close()
+        #Removes temporary file used to parse XML
         os.remove('temp.xml')
         return list
 
@@ -211,8 +234,12 @@ class Window(Frame):
 def runWindow():
     root = Tk()
     root.geometry("600x500")
+    root.resizable(False, False)
     for x in range(0, 3):
         root.grid_rowconfigure(x, minsize=800)
         root.grid_columnconfigure(x, minsize=800)
     app = Window(root)
     root.mainloop()
+
+
+runWindow()
