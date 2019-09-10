@@ -3,13 +3,12 @@ from tkinter import filedialog
 from tkinter import font
 from tkinter.messagebox import showinfo
 import socket
-from pathlib import Path
 from xml.dom import minidom
 import os
 from shutil import copyfile
 
 
-# noinspection PyStatementEffect
+ # constructor
 class Window(Frame):
     # Constructor//Globals
     def __init__(self, master=None):
@@ -17,11 +16,12 @@ class Window(Frame):
         self.master = master
         self.window()
         self.myFile = None
-        self.MainFile = open("xmltempdata.xml", 'w')
+        self.tempFile = open("xmltempdata.xml", 'w')
         self.SOCK = None
         self.PlanInfo = []
         self.resultX = None
         self.Connected = False
+        self.isSaved = False
 
     # main window objects
     def window(self):
@@ -52,11 +52,26 @@ class Window(Frame):
         file = filedialog.asksaveasfile(mode='a', filetypes=fileTypes, defaultextension=fileTypes)
         try:
             self.lbl.configure(text="File path: " + file.name)
-            self.myFile = open(file.name, "w+")
-            self.MainFile.close()
-            self.myFile.close()
-            copyfile('xmltempdata.xml', file.name)
-            self.myFile = open(file.name, "a")
+
+            if self.isSaved == False:
+                self.myFile = open(file.name, "w+")
+                self.tempFile.close()
+                self.myFile.close()
+                copyfile('xmltempdata.xml', file.name)
+                self.isSaved = True
+                #os.remove(self.tempFile)
+                self.myFile = open(file.name, "a")
+                base = os.path.basename(self.tempFile.name)
+                os.remove(base)
+            else:
+                self.myFile.close()
+                tempcopy = open(file.name, "w+")
+                tempcopy.close()
+                copyfile(self.myFile.name, file.name)
+                self.myFile = open(file.name, "a")
+
+
+
         except AttributeError:
             None
             # do nothing, file was not saved.
@@ -175,8 +190,12 @@ class Window(Frame):
 
     # handles window resizing event. adjusts font size accordingly.
     def resize(self, event):
-        size = len(self.objectList) * 13
-        self.font['size'] = int(((self.top.winfo_height() + self.top.winfo_width()) / size))
+        try:
+            size = len(self.objectList) * 13
+            self.font['size'] = int(((self.top.winfo_height() + self.top.winfo_width()) / size))
+        except TclError:
+            # do nothing
+            None
 
     # Sends commands to Verisurf, returns message
     def sendCommand(self, msg):
@@ -184,7 +203,7 @@ class Window(Frame):
         newmsg = self.SOCK.recv(10000)
         newmsg = self.SOCK.recv(10000)
         newmsg = newmsg.decode('ascii')
-        self.MainFile.write(newmsg)
+        self.writeFiles(newmsg)
         return (newmsg)
 
     # Writes Verisurf responses to global file
@@ -193,7 +212,7 @@ class Window(Frame):
         try:
             self.myFile.write(st)
         except:
-            self.MainFile.write(st)
+            self.tempFile.write(st)
 
     # Parses XML response from Verisurf
     def ParseXML(self, data, tagname, id):
@@ -242,4 +261,3 @@ def runWindow():
     root.mainloop()
 
 
-runWindow()
