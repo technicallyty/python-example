@@ -2,7 +2,8 @@ from tkinter import *
 from tkinter.messagebox import showinfo
 
 loginSuccess = False
-
+machineIP = None
+machineName = None
 class LogInForm(Frame):
     # Constructor//Globals
     def __init__(self, master=None):
@@ -11,30 +12,44 @@ class LogInForm(Frame):
         #User Variables
         self.username = StringVar()
         self.password = StringVar()
+        self.machine = StringVar()
         self.credentials={'Verisurf':'Admin'}
+        self.machineNames={'Tyler':'127.0.0.1', 'Sean':'192.168.2.134'}
         self.LogInForm()
 
 
     # main window objects
     def LogInForm(self):
         self.master.title("Log In Form")
-        Label(text="Username:").grid(row=0, column=0, sticky=W, pady=20)
-        Entry(textvariable = self.username).grid(row = 0, column=1, sticky=W, pady=20, padx=5)
-        Label(text="Password: ").grid(row=1, column=0, sticky=W, pady=20)
-        Entry(textvariable = self.password, show="*").grid(row=1, column=1, sticky=W, pady=20, padx=5)
-        Button(text="Log In", command = self.login).grid(row=3, column=0, sticky=W, pady=20)
+        Label(text="Machine:").pack()
+        Entry(textvariable = self.machine).pack()
+        Label(text="Username:").pack()
+        Entry(textvariable = self.username).pack()
+        Label(text="Password: ").pack()
+        Entry(textvariable = self.password, show="*").pack()
+        Button(text="Log In", command = self.login).pack()
 
 
     def login(self):
         try:
-            if(self.password.get() == self.credentials[self.username.get()]):
-                global loginSuccess
-                loginSuccess = True
-                self.destroyz()
+            machine = self.machine.get()
+            user = self.username.get()
+            password = self.password.get()
+            if(password == self.credentials[user]):
+                if(machine == 'Tyler' or 'Sean'):
+                    global loginSuccess
+                    global machineIP
+                    loginSuccess = True
+                    machineIP = self.machineNames[machine]
+                    self.destroyz()
+                else:
+                    showinfo("Cannot Login", "Machine not found on network.")
             else:
                 showinfo("Error", "Username or Password is incorrect!")
         except KeyError:
-            showinfo("Error", "User does not exist!")
+            showinfo("Error", "One or more credentials incorrect")
+
+
 
 
     def destroyz(self):
@@ -42,9 +57,10 @@ class LogInForm(Frame):
 
 def runLogin():
     foo = Tk()
-    foo.geometry("600x500")
+    foo.geometry("500x200")
     foo.resizable(False, False)
 
     application = LogInForm(foo)
     foo.mainloop()
-    return loginSuccess
+    global machineName
+    return (loginSuccess, machineIP, machineName)

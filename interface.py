@@ -1,6 +1,7 @@
 from tkinter import *
 from tkinter import filedialog
 from tkinter import font
+from tkinter import ttk
 from tkinter.messagebox import showinfo
 import socket
 from xml.dom import minidom
@@ -28,23 +29,26 @@ class Window(Frame):
         self.master.title("Tyler's App")
         self.pack(fill=BOTH, expand=True)
 
+        global machineName
+        Label(text=("Connected to: " + machineName)).place(x=650)
+
         # connect button, triggers Connect function
-        self.connection = StringVar()
-        self.connection.set("Not Connected")
-        self.lbl2 = Label(text=self.connection.get())
-        self.lbl2.place(x=175, y=15)
-        connectButton = Button(self, text="Connect", command=self.Connect)
-        connectButton.place(x=175, y=45)
+        self.connectedLabel = Label(text="Status: Not Connected")
+        self.connectedLabel.place(x=5, y=660)
+        self.connectButton = Button(self, text="Connect", command=self.Connect, height=2, width=10)
+        self.connectButton.place(x=340, y=600)
 
-        # save as button - triggers save as
-        saveButton = Button(self, text="Save XML", command=self.saveas)
-        saveButton.place(x=10, y=450)
-        self.lbl = Label(text="File path: ")
-        self.lbl.place(x=100, y=455)
+        # menu bar
+        menu = Menu(self.master)
+        self.master.config(menu=menu)
+        file = Menu(menu)
+        file.add_command(label="Export XML", command=self.saveas)
+        file.add_command(label="Quit", command=self.exit_client)
+        menu.add_cascade(label="File", menu=file)
 
-        # retrieve data from verisurf, triggers getPlans
-        getPlanInfo = Button(self, text="Retrieve Verisurf Info", command=self.getPlans)
-        getPlanInfo.place(x=145, y=150)
+    def exit_client(self):
+        self.master.destroy()
+
 
     # Creates XML file to write Verisurf Responses
     def saveas(self):
@@ -79,44 +83,56 @@ class Window(Frame):
     # Connects to Verisurf.
     def Connect(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        host = socket.gethostname()
+        global ipnum
+        host = ipnum
         port = 33666
         try:
-            s.connect((host, port))
-            self.SOCK = s
-            tm = s.recv(1024)
-            self.tm = tm.decode('ascii')
-            self.lbl2.configure(text="Connected!")
-            self.writeFiles(self.tm)
-            self.Connected = True
+            if self.Connected == False:
+                s.connect((host, port))
+                self.SOCK = s
+                tm = s.recv(1024)
+                self.tm = tm.decode('ascii')
+                self.connectedLabel.configure(text="Status: Connected")
+                self.writeFiles(self.tm)
+                self.Connected = True
+                self.connectButton.configure(text="Disconnect")
+                self.getPlans()
+            else:
+                self.Connected = False
+                self.SOCK.close()
+                self.connectButton.configure(text="Connect")
+                self.connectedLabel.configure(text="Status: Not Connected")
         except ConnectionError:
-            self.lbl2.configure(text="Unable to Connect")
+            self.connectedLabel.configure(text="Unable to Connect")
             self.Connected = False
 
     # Asks verisurf for plan names. Creates drop down box to select each plan
     def getPlans(self):
-        try:
-            sender = "<Inspect_Plan_List />\n"
-            received = self.sendCommand(sender)
-            self.writeFiles(received)
-            self.Plans = self.ParseXML(received, "plan", "id")
+        Label(text="Active Plan").place(x=15,y=100)
 
-            # CREATE DROP DOWN
-            var = StringVar()
-            var.set("Select Plan")
-            menu = OptionMenu(self, var, *self.Plans, command=self.Working)
-            menu.config(width=10)
-            menu.place(x=148, y=200)
-        except:
+        #try:
+        sender = "<Inspect_Plan_List />\n"
+        received = self.sendCommand(sender)
+        self.writeFiles(received)
+        self.Plans = self.ParseXML(received, "plan", "id")
+
+        # CREATE DROP DOWN
+        self.selected = StringVar()
+        menu = ttk.Combobox(self, values=[*self.Plans], textvariable=self.selected)
+        menu.current(0)
+        menu.place(x=15, y=140)
+        menu.bind("<<ComboboxSelected>>", self.userSelection)
+        self.planDetails(0)
+        #except:
             # checks if connection error, or if project empty
-            if self.Connected == False:
-                showinfo("Connection Error", "You are not connected to Verisurf!")
-            else:
-                showinfo("No data", "Your verisurf project is empty!")
+            #if self.Connected == False:
+                #showinfo("Connection Error", "You are not connected to Verisurf!")
+            #else:
+                #showinfo("No data", "Your verisurf project is empty!")
 
     # Required tkinter function to detect selection
-    def Working(self, planNum):
-        self.planDetails(self.Plans.index(planNum))
+    def userSelection(self, event):
+        self.planDetails(self.Plans.index(self.selected.get()))
 
     # Gets plan details - objects in plan
     def planDetails(self, planNumber):
@@ -128,18 +144,23 @@ class Window(Frame):
             received = self.sendCommand(send)
             self.writeFiles(received)
             self.parsedList = self.ParseXML(received, "plan_object", "object_id")
+
             # CREATE DROP DOWN
-            var = StringVar()
-            var.set("Select Object")
-            menu = OptionMenu(self, var, *self.parsedList, command=self.ObjectSelect)
-            menu.config(width=10)
-            menu.place(x=148, y=250)
+            objects = Listbox(self)
+            for items in self.parsedList:
+                objects.insert(1, items)
+            objects.place(x=15,y=200)
+            objects.bind("<<ListboxSelect>>", self.ObjectSelect)
         except:
             showinfo("No data", "Selected plan has no objects.")
 
     # Tkinter function needed to detect when dropdown has changed
-    def ObjectSelect(self, num):
-        self.objectDetails(self.parsedList.index(num))
+    def ObjectSelect(self, event):
+        widget = event.widget
+        selection = widget.curselection()
+        value = widget.get(selection[0])
+        self.objectDetails(self.parsedList.index(value))
+        #self.objectDetails(self.parsedList.index(self.objectSelect))
 
     def objectDetails(self, num):
         sender = "<Inspect_Object_Info id=\"" + str(num) + "\" />\n"
@@ -147,7 +168,7 @@ class Window(Frame):
         self.writeFiles(received)
         self.objectList = self.ParseXML(received, "property", "none")
         resultsbtn = Button(self, text="Results", command=self.showResults)
-        resultsbtn.place(x=160, y=300)
+        resultsbtn.place(x=600, y=600)
         print(self.objectList)
 
     def showResults(self):
@@ -191,7 +212,7 @@ class Window(Frame):
     # handles window resizing event. adjusts font size accordingly.
     def resize(self, event):
         try:
-            size = len(self.objectList) * 13
+            size = len(self.objectList) * 14
             self.font['size'] = int(((self.top.winfo_height() + self.top.winfo_width()) / size))
         except TclError:
             # do nothing
@@ -250,14 +271,18 @@ class Window(Frame):
         return list
 
 
-def runWindow():
+def runWindow(ip, name):
+    global ipnum
+    global machineName
+    machineName = name
+    ipnum = ip
     root = Tk()
-    root.geometry("600x500")
+    root.geometry("800x700")
     root.resizable(False, False)
-    for x in range(0, 3):
-        root.grid_rowconfigure(x, minsize=800)
-        root.grid_columnconfigure(x, minsize=800)
     app = Window(root)
     root.mainloop()
 
+ipnum = None
+machineName = None
 
+runWindow("127.0.0.1", "Tyler")

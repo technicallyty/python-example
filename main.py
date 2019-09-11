@@ -4,9 +4,16 @@ import time
 
 
 
-bll = loginform.runLogin()
+logindata = loginform.runLogin()
 
-if bll == True:
+
+
+loginsuccess = logindata[0]
+machineip = logindata[1]
+machineName = logindata[2]
+
+
+if loginsuccess == True:
     print("Login Successful")
-    runWindow()
+    runWindow(machineip, name)
 
