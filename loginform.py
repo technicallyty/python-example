@@ -4,6 +4,9 @@ from tkinter.messagebox import showinfo
 loginSuccess = False
 machineIP = None
 machineName = None
+
+
+
 class LogInForm(Frame):
     # Constructor//Globals
     def __init__(self, master=None):
@@ -14,7 +17,7 @@ class LogInForm(Frame):
         self.password = StringVar()
         self.machine = StringVar()
         self.credentials={'Verisurf':'Admin'}
-        self.machineNames={'Tyler':'127.0.0.1', 'Sean':'192.168.2.134'}
+        self.machineNames={'Tyler':'127.0.0.1', 'Sean':'192.168.2.134', 'Test':'192.168.2.26'}
         self.LogInForm()
 
 
@@ -32,15 +35,16 @@ class LogInForm(Frame):
 
     def login(self):
         try:
-            machine = self.machine.get()
+            global machineName
+            machineName = self.machine.get()
             user = self.username.get()
             password = self.password.get()
             if(password == self.credentials[user]):
-                if(machine == 'Tyler' or 'Sean'):
+                if(machineName == 'Tyler' or 'Sean'):
                     global loginSuccess
                     global machineIP
                     loginSuccess = True
-                    machineIP = self.machineNames[machine]
+                    machineIP = str(self.machineNames[machineName])
                     self.destroyz()
                 else:
                     showinfo("Cannot Login", "Machine not found on network.")
