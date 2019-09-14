@@ -1,15 +1,14 @@
-from tkinter import *
 from tkinter import filedialog
 from tkinter import font
 from tkinter import ttk
 from tkinter.tix import *
 from tkinter.messagebox import showinfo
 import socket
-from xml.dom import minidom
 import xmlParser
 import os
 from shutil import copyfile
 import DRO
+import handleCommand
 
 
 testcount = 0
@@ -29,11 +28,8 @@ class Window(Frame):
         self.myFile = None
         self.tempFile = open("xmltempdata.xml", 'w')
         self.SOCK = None
-        self.PlanInfo = []
-        self.resultX = None
         self.Connected = False
         self.isSaved = False
-
 
     # main window objects
     def window(self):
@@ -46,7 +42,7 @@ class Window(Frame):
         # connect button, triggers Connect function
         self.connectedLabel = Label(text="Status: Not Connected")
         self.connectedLabel.place(x=5, y=660)
-        self.connectButton = Button(self, text="Connect", command=self.Connect, height=2, width=10)
+        self.connectButton = Button(self, text="Connect", command=self.connect, height=2, width=10)
         self.connectButton.place(x=340, y=640)
 
         # menu bar
@@ -56,8 +52,6 @@ class Window(Frame):
         file.add_command(label="Export XML", command=self.saveas)
         file.add_command(label="Quit", command=self.exit_client)
         menu.add_cascade(label="File", menu=file)
-
-
 
 
     def exit_client(self):
@@ -92,7 +86,7 @@ class Window(Frame):
             # do nothing, file was not saved.
 
     # Connects to Verisurf.
-    def Connect(self):
+    def connect(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         global ipnum
         host = ipnum
@@ -104,11 +98,10 @@ class Window(Frame):
                 tm = s.recv(1024)
                 self.tm = tm.decode('ascii')
                 self.connectedLabel.configure(text="Status: Connected")
-                self.writeFiles(self.tm)
+                handleCommand.writeFiles(self, self.tm)
                 self.Connected = True
                 self.connectButton.configure(text="Disconnect")
-                self.getPlans()
-                Button(self, text="DRO", command=self.dispDevice).place(x=300, y=500)
+                self.layOut()
             else:
                 self.Connected = False
                 self.SOCK.close()
@@ -122,75 +115,42 @@ class Window(Frame):
             self.connectedLabel.configure(text="Unable to Connect")
             self.Connected = False
 
+    def layOut(self):
+        self.getPlans()
+        self.objType = StringVar()
+        Button(self, text="DRO", command=lambda: DRO.dispDevice(self)).place(x=260, y=600)
+        menu = ttk.Combobox(self, values=['Point', 'Line', 'Circle', 'Ellipse',
+                                          'Slot', 'Plane', 'Sphere', 'Cylinder','Spline',
+                                          'Cone', 'Parabaloid', 'Torus', 'Analysis'],
+                            textvariable=self.objType)
+        menu.place(x=300,y=100)
+        menu.current(0)
+        menu.bind("<<ComboboxSelected>>", self.selection)
 
-    def dispDevice(self):
-        msg = "<Device_Info id=\"1\" />\n"
-        self.SOCK.send(msg.encode('ascii'))
-        newmsg = self.SOCK.recv(10000)
-        newmsg = newmsg.decode('ascii')
-        taglist = ['X', 'Y', 'Z', 'I', 'J', 'K']
-        data = xmlParser.ParseXML(newmsg, "device_info", "none", taglist)
-        print(data)
-        self.topwin = Toplevel(master=None, height=750, width=750, relief="sunken")
-        self.font1 = font.Font(self.master, family="Helvetica", size=20, weight="bold")
+    def selection(self, event):
+        non = handleCommand.sendCommand(self, "<Measure_"+self.objType.get() + " />\n")
 
-        Label(self.topwin, text="X:", font=self.font1).grid(row=0, column=0)
-        Label(self.topwin, text="Y:", font=self.font1).grid(row=1, column=0)
-        Label(self.topwin, text="Z:", font=self.font1).grid(row=2,column=0)
-        Label(self.topwin, text="I:", font=self.font1).grid(row=0, column=2)
-        Label(self.topwin, text="J:", font=self.font1).grid(row=1, column=2)
-        Label(self.topwin, text="K:", font=self.font1).grid(row=2, column=2)
-        self.testlabel = Label(self.topwin, text="test", font=self.font1).grid(row=3, column=3)
-        self.placeValues(data)
 
-        self.topwin.after(1000, self.refresh_window)
-
-    def refresh_window(self):
-        msg = "<Device_Info id=\"1\" />\n"
-        self.SOCK.send(msg.encode('ascii'))
-        newmsg = self.SOCK.recv(10000)
-        newmsg = newmsg.decode('ascii')
-        taglist = ['X', 'Y', 'Z', 'I', 'J', 'K']
-        data = xmlParser.ParseXML(newmsg, "device_info", "none", taglist)
-        self.placeValues(data)
-        self.topwin.after(1000, self.refresh_window)
-
-    def placeValues(self, values):
-        global testcount
-        testcount += 1
-        items = values[0]
-        Label(self.topwin, text="{:.3f}".format(items['X']), font=self.font1).grid(row=0,column=1)
-        Label(self.topwin, text="{:.3f}".format(items['Y']), font=self.font1).grid(row=1,column=1)
-        Label(self.topwin, text="{:.3f}".format(items['Z']), font=self.font1).grid(row=2,column=1)
-        Label(self.topwin, text="{:.3f}".format(items['I']), font=self.font1).grid(row=0,column=3)
-        Label(self.topwin, text="{:.3f}".format(items['J']), font=self.font1).grid(row=1,column=3)
-        Label(self.topwin, text="{:.3f}".format(items['K']), font=self.font1).grid(row=2,column=3)
-        self.testlabel.config(text=testcount)
+    def resize_top(self, event):
+        size = self.topwin.winfo_height()
+        self.font1['size'] = int(size/20)
 
 
     # Asks verisurf for plan names. Creates drop down box to select each plan
     def getPlans(self):
         Label(text="Active Plan").place(x=0, y=50)
+        sender = "<Inspect_Plan_List />\n"
+        received = handleCommand.sendCommand(self, sender)
+        self.Plans = xmlParser.ParseXML(received, "plan", "id", None)
 
-        try:
-            sender = "<Inspect_Plan_List />\n"
-            received = self.sendCommand(sender)
-            self.writeFiles(received)
-            self.Plans = xmlParser.ParseXML(received, "plan", "id", None)
+        # CREATE DROP DOWN
+        self.selected = StringVar()
+        menu = ttk.Combobox(self, values=[*self.Plans], textvariable=self.selected)
+        menu.current(0)
+        menu.place(x=0, y=80)
+        menu.bind("<<ComboboxSelected>>", self.userSelection)
+        self.planDetails(0)
 
-            # CREATE DROP DOWN
-            self.selected = StringVar()
-            menu = ttk.Combobox(self, values=[*self.Plans], textvariable=self.selected)
-            menu.current(0)
-            menu.place(x=0, y=80)
-            menu.bind("<<ComboboxSelected>>", self.userSelection)
-            self.planDetails(0)
-        except:
-        # checks if connection error, or if project empty
-            if self.Connected == False:
-                showinfo("Connection Error", "You are not connected to Verisurf!")
-            else:
-                showinfo("No data", "Your verisurf project is empty!")
 
     # Required tkinter function to detect selection
     def userSelection(self, event):
@@ -203,12 +163,8 @@ class Window(Frame):
     # Gets plan details - objects in plan
     def planDetails(self, planNumber):
         try:
-            send = ("<Inspect_Plan_Load id=\"" + str(planNumber) + "\" />\n")
-            self.SOCK.send(send.encode('ascii'))
-            temp = self.SOCK.recv(10000)
             send = "<Inspect_Plan_Info id = \"" + str(planNumber) + "\" />\n"
-            received = self.sendCommand(send)
-            self.writeFiles(received)
+            received = handleCommand.sendCommand(self, send)
             self.parsedList = xmlParser.ParseXML(received, "plan_object", "object_id", None)
 
             # CREATE DROP DOWN
@@ -245,8 +201,8 @@ class Window(Frame):
         for i in range(0, num):
             isOOT = False
             sender = "<Inspect_Object_Info id=\"" + str(i) + "\" />\n"
-            received = self.sendCommand(sender)
-            taglist = names = ["name", "nominal", "measured", "deviation", "tolmin", "tolmax"]
+            received = handleCommand.sendCommand(self, sender)
+            taglist = ["name", "nominal", "measured", "deviation", "tolmin", "tolmax"]
             list = xmlParser.ParseXML(received, "property", "none", taglist)
             for items in list:
                 if items['measured'] == 0:
@@ -269,9 +225,9 @@ class Window(Frame):
 
     def objectDetails(self, num):
         sender = "<Inspect_Object_Info id=\"" + str(num) + "\" />\n"
-        received = self.sendCommand(sender)
-        self.writeFiles(received)
-        taglist= ["name", "nominal", "measured", "deviation", "tolmin", "tolmax"]
+        received = handleCommand.sendCommand(self, sender)
+
+        taglist = ["name", "nominal", "measured", "deviation", "tolmin", "tolmax"]
         self.objectList = xmlParser.ParseXML(received, "property", "none", taglist)
         self.img = PhotoImage(file="sizeicon.png")
         resultsbtn = Button(self, command=self.showResults, image=self.img, height=20, width=20)
@@ -325,6 +281,9 @@ class Window(Frame):
         self.font = font.Font(self.master, family="Helvetica", size=20, weight="bold")
 
         self.top = Toplevel(master=None, height=750, width=750, relief="sunken")
+        for x in range(0, len(self.objectList)):
+            self.top.grid_rowconfigure(x, weight=1)
+            self.top.grid_columnconfigure(x, weight=1)
         # Default headers for information
         actual = Label(self.top, text="Act", font=self.font)
         actual.grid(row=0, column=1)
@@ -366,23 +325,6 @@ class Window(Frame):
         except TclError:
             # do nothing
             None
-
-    # Sends commands to Verisurf, returns message
-    def sendCommand(self, msg):
-        self.SOCK.send(msg.encode('ascii'))
-        newmsg = self.SOCK.recv(10000)
-        newmsg = self.SOCK.recv(10000)
-        newmsg = newmsg.decode('ascii')
-        self.writeFiles(newmsg)
-        return (newmsg)
-
-    # Writes Verisurf responses to global file
-    def writeFiles(self, st):
-        # Try to write to the saveas file, otherwise, temp file.
-        try:
-            self.myFile.write(st)
-        except:
-            self.tempFile.write(st)
 
 
 def runWindow(ip, name):

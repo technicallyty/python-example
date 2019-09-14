@@ -1,5 +1,16 @@
 from xml.dom import minidom
 
+# -------------------------------------------------
+# Handles the parsing of XML strings
+# Data = string of XML
+# tagname = where to start looking.
+# id = what to look for inside the tagname
+# if have multiple things to look for within tagname
+# pass as string 'none'
+# pass list of id's to look for in names.
+# --------------------------------------------------
+
+
 def ParseXML(data, tagname, id, names):
     mydoc = minidom.parseString(data)
     list = []
