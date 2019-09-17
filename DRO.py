@@ -11,6 +11,8 @@ import handleCommand
 # this file for some reason.
 # ------------------------------------------
 
+taglist = ['X', 'Y', 'Z', 'PX', 'PY', 'PZ', 'DX', 'DY', 'DZ', 'D3']
+
 def dispDevice(object):
     # get data
     msg = "<Build />\n"
@@ -18,7 +20,7 @@ def dispDevice(object):
     msg = "<Device_Info id=\"1\" />\n"
     rmsg = handleCommand.sendCommand(object, msg)
 
-    taglist = ['X', 'Y', 'Z', 'PX', 'PY', 'PZ', 'DX', 'DY', 'DZ']
+    global taglist
     data = xmlParser.ParseXML(rmsg, "device_info", "none", taglist)
     print(data)
     # set up interface
@@ -30,6 +32,7 @@ def dispDevice(object):
 
     xpads = 10
     ypads = 10
+    widthnum = 5
     items = data[0]
     setup = ["X", "Y", "Z", "3D"]
     rownum=1
@@ -41,7 +44,7 @@ def dispDevice(object):
         lbl.grid_columnconfigure(0, weight=1)
         rownum += 1
 
-    setup = ["Act", "Meas", "Dev"]
+    setup = ["Nom", "Meas", "Dev"]
     colnum = 1
     for labels in setup:
         lbl = Label(object.topwin, text=labels, font=object.font1, anchor=E)
@@ -51,53 +54,58 @@ def dispDevice(object):
         lbl.grid_columnconfigure(0, weight=1)
         colnum += 1
 
-    object.xAct = Label(object.topwin, text="{:.3f}".format(items['PX']), font=object.font1, anchor=E, width=10)
+
+
+    object.dev3D = Label(object.topwin, text="{:.3f}".format(items['D3']), font=object.font1, anchor=E, width=widthnum)
+    object.dev3D.grid(row=4, column=3, padx=xpads, pady=ypads, sticky="nsew")
+    object.dev3D.grid_columnconfigure(1, weight=1)
+    object.dev3D.grid_rowconfigure(0, weight=1)
+
+    object.xAct = Label(object.topwin, text="{:.3f}".format(items['PX']), font=object.font1, anchor=E, width=widthnum)
     object.xAct.grid(row=1, column=1, padx=xpads, pady=ypads, sticky="nsew")
     object.xAct.grid_columnconfigure(1, weight=1)
     object.xAct.grid_rowconfigure(0, weight=1)
 
-    object.yAct = Label(object.topwin, text="{:.3f}".format(items['PY']), font=object.font1, anchor=E, width=10)
+    object.yAct = Label(object.topwin, text="{:.3f}".format(items['PY']), font=object.font1, anchor=E, width=widthnum)
     object.yAct.grid(row=2, column=1, padx=xpads, pady=ypads, sticky="nsew")
     object.yAct.grid_columnconfigure(1, weight=1)
     object.yAct.grid_rowconfigure(0, weight=1)
 
-    object.zAct = Label(object.topwin, text="{:.3f}".format(items['PZ']), font=object.font1, anchor=E, width=10)
+    object.zAct = Label(object.topwin, text="{:.3f}".format(items['PZ']), font=object.font1, anchor=E, width=widthnum)
     object.zAct.grid(row=3, column=1, padx=xpads, pady=ypads, sticky="nsew")
     object.zAct.grid_columnconfigure(1, weight=1)
     object.zAct.grid_rowconfigure(0, weight=1)
 
-    object.xDev = Label(object.topwin, text="{:.3f}".format(items['DX']), font=object.font1, anchor=E, width=10)
+    object.xDev = Label(object.topwin, text="{:.3f}".format(items['DX']), font=object.font1, anchor=E, width=widthnum)
     object.xDev.grid(row=1, column=3, padx=xpads, pady=ypads, sticky="nsew")
     object.xDev.grid_columnconfigure(1, weight=1)
     object.xDev.grid_rowconfigure(0, weight=1)
 
-    object.yDev = Label(object.topwin, text="{:.3f}".format(items['DY']), font=object.font1, anchor=E, width=10)
+    object.yDev = Label(object.topwin, text="{:.3f}".format(items['DY']), font=object.font1, anchor=E, width=widthnum)
     object.yDev.grid(row=2, column=3, padx=xpads, pady=ypads, sticky="nsew")
     object.yDev.grid_columnconfigure(1, weight=1)
     object.yDev.grid_rowconfigure(0, weight=1)
 
-    object.zDev = Label(object.topwin, text="{:.3f}".format(items['DZ']), font=object.font1, anchor=E, width=10)
+    object.zDev = Label(object.topwin, text="{:.3f}".format(items['DZ']), font=object.font1, anchor=E, width=widthnum)
     object.zDev.grid(row=3, column=3, padx=xpads, pady=ypads, sticky="nsew")
     object.zDev.grid_columnconfigure(1, weight=1)
     object.zDev.grid_rowconfigure(0, weight=1)
 
 
-    object.xlbl = Label(object.topwin, text="{:.3f}".format(items['X']), font=object.font1, anchor=E, width=10)
+    object.xlbl = Label(object.topwin, text="{:.3f}".format(items['X']), font=object.font1, anchor=E, width=widthnum)
     object.xlbl.grid(row=1, column=2, padx=xpads, pady=ypads, sticky="nsew")
     object.xlbl.grid_columnconfigure(1, weight=1)
     object.xlbl.grid_rowconfigure(0, weight=1)
 
-    object.ylbl = Label(object.topwin, text="{:.3f}".format(items['Y']), font=object.font1, anchor=E, width=10)
+    object.ylbl = Label(object.topwin, text="{:.3f}".format(items['Y']), font=object.font1, anchor=E, width=widthnum)
     object.ylbl.grid(row=2, column=2, padx=xpads, pady=ypads, sticky="nsew")
     object.ylbl.grid_columnconfigure(1, weight=1)
     object.ylbl.grid_rowconfigure(0, weight=1)
 
-    object.zlbl = Label(object.topwin, text="{:.3f}".format(items['Z']), font=object.font1, anchor=E, width=10)
+    object.zlbl = Label(object.topwin, text="{:.3f}".format(items['Z']), font=object.font1, anchor=E, width=widthnum)
     object.zlbl.grid(row=3, column=2, padx=xpads, pady=ypads, sticky="nsew")
     object.zlbl.grid_columnconfigure(1, weight=1)
     object.zlbl.grid_rowconfigure(0, weight=1)
-
-
 
     object.update()
     object.topwin.bind('<Configure>', object.resize_top)
@@ -110,7 +118,7 @@ def dispDevice(object):
 def refresh_window(object):
     msg = "<Device_Info id=\"1\" />\n"
     newmsg = handleCommand.sendCommand(object, msg)
-    taglist = ['X', 'Y', 'Z', 'PX', 'PY', 'PZ', 'DX', 'DY', 'DZ']
+    global taglist
     data = xmlParser.ParseXML(newmsg, "device_info", "none", taglist)
     placeValues(object, data)
     object.topwin.after(5, lambda: refresh_window(object))
@@ -127,3 +135,4 @@ def placeValues(object, values):
     object.xDev.configure(text="{:.3f}".format(items['DX']))
     object.yDev.configure(text="{:.3f}".format(items['DY']))
     object.zDev.configure(text="{:.3f}".format(items['DZ']))
+    object.dev3D.configure(text="{:.3f}".format(items['D3']))

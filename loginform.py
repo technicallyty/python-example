@@ -1,6 +1,16 @@
 from tkinter import *
 from tkinter.messagebox import showinfo
 
+# ---------------------------
+# Basic login form
+# hard coded credentials for now.
+# IP associated with name string.
+# May need to add IP scanner over
+# verisurf open ports and get a
+# drop down of possible connections
+# ---------------------------
+
+
 loginSuccess = False
 machineIP = None
 machineName = None

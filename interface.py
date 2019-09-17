@@ -11,8 +11,14 @@ import DRO
 import handleCommand
 
 
-testcount = 0
-
+# --------------------------
+# Main GUI code!
+# Handles placement of front end objects
+# handles resizing events for
+# scaling the widgets to their respective window
+# handles saving functionalities,
+# connecting, and data placement
+# --------------------------
 
 # constructor
 class Window(Frame):
@@ -21,8 +27,10 @@ class Window(Frame):
         Frame.__init__(self, master)
         self.listboxFrame = Frame(self, width=200, height=400)
         self.listboxFrame.pack(side=LEFT)
-        self.dataFrame = Frame(self, width=590, height=300)
+        self.dataFrame = Frame(self, width=590, height=400)
         self.dataFrame.pack(pady=125)
+        self.msmtFrame = Frame(self, width=100, height=100, relief='groove')
+        self.msmtFrame.place(x=600, y=550)
         self.master = master
         self.window()
         self.myFile = None
@@ -52,7 +60,6 @@ class Window(Frame):
         file.add_command(label="Export XML", command=self.saveas)
         file.add_command(label="Quit", command=self.exit_client)
         menu.add_cascade(label="File", menu=file)
-
 
     def exit_client(self):
         self.master.destroy()
@@ -118,30 +125,58 @@ class Window(Frame):
     def layOut(self):
         self.getPlans()
         self.objType = StringVar()
-        Button(self, text="DRO", command=lambda: DRO.dispDevice(self)).place(x=260, y=600)
-        menu = ttk.Combobox(self, values=['Point', 'Line', 'Circle', 'Ellipse',
-                                          'Slot', 'Plane', 'Sphere', 'Cylinder','Spline',
-                                          'Cone', 'Parabaloid', 'Torus', 'Analysis'],
+        self.msmtFrameLayout()
+        Button(self, text="DRO", command=lambda: DRO.dispDevice(self)).place(x=50, y=585)
+
+
+    def msmtFrameLayout(self):
+        menu = ttk.Combobox(self.msmtFrame, values=['Point', 'Line', 'Circle', 'Ellipse',
+                                                    'Slot', 'Plane', 'Sphere', 'Cylinder', 'Spline',
+                                                    'Cone'],
                             textvariable=self.objType)
-        menu.place(x=300,y=100)
+        menu.pack()
         menu.current(0)
         menu.bind("<<ComboboxSelected>>", self.selection)
 
+        modes = [("Single Point", "0"), ("Continuous", "1"), ("Average Point", "2")]
+        ptMode = handleCommand.sendCommand(self, "<Measure_Get_Point_Mode />\n")
+        nolist = []
+        ptMode = xmlParser.ParseXML(ptMode, "data", "data", nolist)
+        self.v = StringVar()
+        self.v.set(ptMode[0])
+
+        for text, mode in modes:
+            b = Radiobutton(self.msmtFrame, text=text, variable=self.v, value=mode, justify=LEFT, command=self.ptMode, indicatoron=0)
+            b.pack(anchor=W)
+
+        msmtBtn = Button(self.msmtFrame, text="Measure",
+                         command=lambda: handleCommand.sendCommand(self, "<Measure_Trigger />\n"), height=1, width=15)
+
+        msmtBtn.pack()
+
+    def ptMode(self):
+        modes = ["<Measure_Set_Single />\n", "<Measure_Set_Cloud />\n", "<Measure_Set_Average />\n"]
+        handleCommand.sendCommand(self, modes[int(self.v.get())])
+
+
     def selection(self, event):
-        non = handleCommand.sendCommand(self, "<Measure_"+self.objType.get() + " />\n")
+        handleCommand.sendCommand(self, "<Measure_" + self.objType.get() + " />\n")
+
 
 
     def resize_top(self, event):
         size = self.topwin.winfo_height()
-        self.font1['size'] = int(size/20)
-
+        self.font1['size'] = int(size / 20)
 
     # Asks verisurf for plan names. Creates drop down box to select each plan
     def getPlans(self):
         Label(text="Active Plan").place(x=0, y=50)
         sender = "<Inspect_Plan_List />\n"
         received = handleCommand.sendCommand(self, sender)
-        self.Plans = xmlParser.ParseXML(received, "plan", "id", None)
+        try:
+            self.Plans = xmlParser.ParseXML(received, "plan", "id", None)
+        except:
+            self.Plans = ['No Plans']
 
         # CREATE DROP DOWN
         self.selected = StringVar()
@@ -150,7 +185,6 @@ class Window(Frame):
         menu.place(x=0, y=80)
         menu.bind("<<ComboboxSelected>>", self.userSelection)
         self.planDetails(0)
-
 
     # Required tkinter function to detect selection
     def userSelection(self, event):
@@ -178,13 +212,13 @@ class Window(Frame):
             self.listboxFrame.objects.bind("<<ListboxSelect>>", self.ObjectSelect)
             self.listboxFrame.scrollbar.config(command=self.listboxFrame.objects.yview)
 
-            x=1
+            x = 1
             for items in self.parsedList:
                 self.listboxFrame.objects.insert(END, items)
-                x+=1
+                x += 1
             ranger = len(self.parsedList)
             isOOT = self.checkOOT(ranger)
-            x=0
+            x = 0
             for i in isOOT:
                 if i == True:
                     self.listboxFrame.objects.itemconfig(x, bg="red")
@@ -192,7 +226,7 @@ class Window(Frame):
                     self.listboxFrame.objects.itemconfig(x, bg="white")
                 else:
                     self.listboxFrame.objects.itemconfig(x, bg="green")
-                x+=1
+                x += 1
         except:
             showinfo("No data", "Selected plan has no objects.")
 
@@ -232,7 +266,7 @@ class Window(Frame):
         self.img = PhotoImage(file="sizeicon.png")
         resultsbtn = Button(self, command=self.showResults, image=self.img, height=20, width=20)
         resultsbtn.image = self.img
-        resultsbtn.place(x=650, y=585)
+        resultsbtn.place(x=5, y=580)
         resultsTip = Balloon()
         resultsTip.bind_widget(resultsbtn, balloonmsg="Expand Results")
         self.placeResults()
@@ -245,12 +279,12 @@ class Window(Frame):
         fontsize = 10
 
         self.font1 = font.Font(self.master, family="Helvetica", size=fontsize, weight="bold")
-        frameName.actual = Label(frameName, text="Act", font=self.font1)
-        frameName.actual.grid(row=0, column=1, padx=xpad)
-        frameName.meas = Label(frameName, text="Meas", font=self.font1)
-        frameName.meas.grid(row=0, column=2, padx=xpad)
-        frameName.dev = Label(frameName, text="Dev", font=self.font1)
-        frameName.dev.grid(row=0, column=3, padx=xpad)
+        actual = Label(frameName, text="Act", font=self.font1)
+        actual.grid(row=0, column=1, padx=xpad)
+        meas = Label(frameName, text="Meas", font=self.font1)
+        meas.grid(row=0, column=2, padx=xpad)
+        dev = Label(frameName, text="Dev", font=self.font1)
+        dev.grid(row=0, column=3, padx=xpad)
 
         inTol = "green"
         outTol = "red"
@@ -258,22 +292,22 @@ class Window(Frame):
         rows = 1
         # generates values to display
         for items in self.objectList:
-            frameName.nameLabel = Label(frameName, text=items['name'], font=self.font1)
-            frameName.nameLabel.grid(row=rows, column=0, padx=xpad, pady=ypad, sticky=W)
-            frameName.nomLabel = Label(frameName, text="{:.3f}".format(items['nominal']), font=self.font1, fg=inTol)
-            frameName.nomLabel.grid(row=rows, column=1, padx=xpad, pady=ypad, sticky=W)
-            frameName.devLabel = Label(frameName, text="{:.3f}".format(items['deviation']), font=self.font1, fg=inTol)
-            frameName.devLabel.grid(row=rows, column=3, padx=xpad, pady=ypad, sticky=W)
+            nameLabel = Label(frameName, text=items['name'], font=self.font1)
+            nameLabel.grid(row=rows, column=0, padx=xpad, pady=ypad, sticky=W)
+            nomLabel = Label(frameName, text="{:.3f}".format(items['nominal']), font=self.font1, fg=inTol)
+            nomLabel.grid(row=rows, column=1, padx=xpad, pady=ypad, sticky=W)
+            devLabel = Label(frameName, text="{:.3f}".format(items['deviation']), font=self.font1, fg=inTol)
+            devLabel.grid(row=rows, column=3, padx=xpad, pady=ypad, sticky=W)
 
             # Logic to determine if OOT. changes to red if so
             if items['deviation'] > items['tolmax'] or items['deviation'] < items['tolmin']:
-                frameName.measLabel = Label(frameName, text="{:.3f}".format(items['measured']), font=self.font1,
+                measLabel = Label(frameName, text="{:.3f}".format(items['measured']), font=self.font1,
                                             fg=outTol)
                 self.isOOT = True
             else:
-                frameName.measLabel = Label(frameName, text="{:.3f}".format(items['measured']), font=self.font1,
+                measLabel = Label(frameName, text="{:.3f}".format(items['measured']), font=self.font1,
                                             fg=inTol)
-            frameName.measLabel.grid(row=rows, column=2, padx=xpad, pady=ypad, sticky=W)
+            measLabel.grid(row=rows, column=2, padx=xpad, pady=ypad, sticky=W)
 
             rows += 1
 
@@ -286,11 +320,11 @@ class Window(Frame):
             self.top.grid_columnconfigure(x, weight=1)
         # Default headers for information
         actual = Label(self.top, text="Act", font=self.font)
-        actual.grid(row=0, column=1)
+        actual.grid(row=0, column=1, padx=100, sticky=W)
         meas = Label(self.top, text="Meas", font=self.font)
-        meas.grid(row=0, column=2)
+        meas.grid(row=0, column=2, padx=100, sticky=W)
         dev = Label(self.top, text="Dev", font=self.font)
-        dev.grid(row=0, column=3)
+        dev.grid(row=0, column=3, padx=100, sticky=W)
 
         inTol = "green"
         outTol = "red"
