@@ -9,10 +9,12 @@ import os
 from shutil import copyfile
 import DRO
 import handleCommand
+import threading
+
 
 
 # --------------------------
-# Main GUI code!
+# Main GUI code
 # Handles placement of front end objects
 # handles resizing events for
 # scaling the widgets to their respective window
@@ -24,20 +26,21 @@ import handleCommand
 class Window(Frame):
     # Constructor//Globals
     def __init__(self, master=None):
-        Frame.__init__(self, master)
+        Frame.__init__(self, master) # FRAMES \
         self.listboxFrame = Frame(self, width=200, height=400)
         self.listboxFrame.pack(side=LEFT)
         self.dataFrame = Frame(self, width=590, height=400)
         self.dataFrame.pack(pady=125)
         self.msmtFrame = Frame(self, width=100, height=100, relief='groove')
-        self.msmtFrame.place(x=600, y=550)
+        self.msmtFrame.place(x=600, y=550) # FRAMES^
         self.master = master
         self.window()
-        self.myFile = None
-        self.tempFile = open("xmltempdata.xml", 'w')
-        self.SOCK = None
+        self.myFile = None                              # temp save xml
+        self.tempFile = open("xmltempdata.xml", 'w')    # temporary pre-save XML dump
+        self.SOCK = None        # socket object. initialized upon connect()
         self.Connected = False
-        self.isSaved = False
+        self.isSaved = False    # helper bool to see if file has been saved yet
+        self.measuring = False
 
     # main window objects
     def window(self):
@@ -45,11 +48,9 @@ class Window(Frame):
         self.pack(fill=BOTH, expand=True)
 
         global machineName
-        Label(text=("Connected to: " + machineName)).place(x=650)
+        Label(text=("Machine: " + machineName)).place(x=650)
 
         # connect button, triggers Connect function
-        self.connectedLabel = Label(text="Status: Not Connected")
-        self.connectedLabel.place(x=5, y=660)
         self.connectButton = Button(self, text="Connect", command=self.connect, height=2, width=10)
         self.connectButton.place(x=340, y=640)
 
@@ -60,6 +61,7 @@ class Window(Frame):
         file.add_command(label="Export XML", command=self.saveas)
         file.add_command(label="Quit", command=self.exit_client)
         menu.add_cascade(label="File", menu=file)
+
 
     def exit_client(self):
         self.master.destroy()
@@ -104,7 +106,6 @@ class Window(Frame):
                 self.SOCK = s
                 tm = s.recv(1024)
                 self.tm = tm.decode('ascii')
-                self.connectedLabel.configure(text="Status: Connected")
                 handleCommand.writeFiles(self, self.tm)
                 self.Connected = True
                 self.connectButton.configure(text="Disconnect")
@@ -113,13 +114,11 @@ class Window(Frame):
                 self.Connected = False
                 self.SOCK.close()
                 self.connectButton.configure(text="Connect")
-                self.connectedLabel.configure(text="Status: Not Connected")
                 for widget in self.listboxFrame.winfo_children():
                     widget.destroy()
                 for widget in self.dataFrame.winfo_children():
                     widget.destroy()
         except ConnectionError:
-            self.connectedLabel.configure(text="Unable to Connect")
             self.Connected = False
 
     def layOut(self):
@@ -197,6 +196,8 @@ class Window(Frame):
     # Gets plan details - objects in plan
     def planDetails(self, planNumber):
         try:
+            send = "<Inspect_Plan_Load id=\"" + str(planNumber) + "\" />\n"
+            received = handleCommand.sendCommand(self, send)
             send = "<Inspect_Plan_Info id = \"" + str(planNumber) + "\" />\n"
             received = handleCommand.sendCommand(self, send)
             self.parsedList = xmlParser.ParseXML(received, "plan_object", "object_id", None)
@@ -229,6 +230,9 @@ class Window(Frame):
                 x += 1
         except:
             showinfo("No data", "Selected plan has no objects.")
+
+
+
 
     def checkOOT(self, num):
         indexOOT = []
@@ -291,6 +295,8 @@ class Window(Frame):
         self.isOOT = False
         rows = 1
         # generates values to display
+        print(self.objectList)
+        labels={}
         for items in self.objectList:
             nameLabel = Label(frameName, text=items['name'], font=self.font1)
             nameLabel.grid(row=rows, column=0, padx=xpad, pady=ypad, sticky=W)
@@ -309,7 +315,14 @@ class Window(Frame):
                                             fg=inTol)
             measLabel.grid(row=rows, column=2, padx=xpad, pady=ypad, sticky=W)
 
+            labelList=[]
+            labelList.append(nomLabel)
+            labelList.append(devLabel)
+            labelList.append(measLabel)
+            labels.update( { items['name']: labelList } )
             rows += 1
+
+
 
     def showResults(self):
         self.font = font.Font(self.master, family="Helvetica", size=20, weight="bold")
