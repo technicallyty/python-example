@@ -40,7 +40,10 @@ class Window(Frame):
         self.SOCK = None        # socket object. initialized upon connect()
         self.Connected = False
         self.isSaved = False    # helper bool to see if file has been saved yet
+        self.runstate = False
         self.measuring = False
+        self.currentObject = []
+        self.selectedObject = None
 
     # main window objects
     def window(self):
@@ -61,7 +64,7 @@ class Window(Frame):
         file.add_command(label="Export XML", command=self.saveas)
         file.add_command(label="Quit", command=self.exit_client)
         menu.add_cascade(label="File", menu=file)
-
+        #Button(self, text="test", command= lambda: print(handleCommand.sendCommand(self, "<Object_List />\n"))).place(x=300,y=300)
 
     def exit_client(self):
         self.master.destroy()
@@ -126,6 +129,15 @@ class Window(Frame):
         self.objType = StringVar()
         self.msmtFrameLayout()
         Button(self, text="DRO", command=lambda: DRO.dispDevice(self)).place(x=50, y=585)
+        t2 = threading.Thread(target=self.checkMeasure)
+        self.dataFrame.after(0, t2.start())
+        self.img = PhotoImage(file="sizeicon.png")
+
+        resultsbtn = Button(self, command=self.showResults, image=self.img, height=20, width=20)
+        resultsbtn.image = self.img
+        resultsbtn.place(x=5, y=580)
+        resultsTip = Balloon()
+        resultsTip.bind_widget(resultsbtn, balloonmsg="Expand Results")
 
 
     def msmtFrameLayout(self):
@@ -138,7 +150,7 @@ class Window(Frame):
         menu.bind("<<ComboboxSelected>>", self.selection)
 
         modes = [("Single Point", "0"), ("Continuous", "1"), ("Average Point", "2")]
-        ptMode = handleCommand.sendCommand(self, "<Measure_Get_Point_Mode />\n")
+        ptMode = handleCommand.sendCommand(self, "<Measure_Get_Point_Mode />\n", True)
         nolist = []
         ptMode = xmlParser.ParseXML(ptMode, "data", "data", nolist)
         self.v = StringVar()
@@ -149,17 +161,17 @@ class Window(Frame):
             b.pack(anchor=W)
 
         msmtBtn = Button(self.msmtFrame, text="Measure",
-                         command=lambda: handleCommand.sendCommand(self, "<Measure_Trigger />\n"), height=1, width=15)
+                         command=lambda: handleCommand.sendCommand(self, "<Measure_Trigger />\n", True), height=1, width=15)
 
         msmtBtn.pack()
 
     def ptMode(self):
         modes = ["<Measure_Set_Single />\n", "<Measure_Set_Cloud />\n", "<Measure_Set_Average />\n"]
-        handleCommand.sendCommand(self, modes[int(self.v.get())])
+        handleCommand.sendCommand(self, modes[int(self.v.get())], True)
 
 
     def selection(self, event):
-        handleCommand.sendCommand(self, "<Measure_" + self.objType.get() + " />\n")
+        handleCommand.sendCommand(self, "<Measure_" + self.objType.get() + " />\n", True)
 
 
 
@@ -171,7 +183,7 @@ class Window(Frame):
     def getPlans(self):
         Label(text="Active Plan").place(x=0, y=50)
         sender = "<Inspect_Plan_List />\n"
-        received = handleCommand.sendCommand(self, sender)
+        received = handleCommand.sendCommand(self, sender, True)
         try:
             self.Plans = xmlParser.ParseXML(received, "plan", "id", None)
         except:
@@ -197,9 +209,9 @@ class Window(Frame):
     def planDetails(self, planNumber):
         try:
             send = "<Inspect_Plan_Load id=\"" + str(planNumber) + "\" />\n"
-            received = handleCommand.sendCommand(self, send)
+            received = handleCommand.sendCommand(self, send, True)
             send = "<Inspect_Plan_Info id = \"" + str(planNumber) + "\" />\n"
-            received = handleCommand.sendCommand(self, send)
+            received = handleCommand.sendCommand(self, send, True)
             self.parsedList = xmlParser.ParseXML(received, "plan_object", "object_id", None)
 
             # CREATE DROP DOWN
@@ -239,7 +251,7 @@ class Window(Frame):
         for i in range(0, num):
             isOOT = False
             sender = "<Inspect_Object_Info id=\"" + str(i) + "\" />\n"
-            received = handleCommand.sendCommand(self, sender)
+            received = handleCommand.sendCommand(self, sender, False)
             taglist = ["name", "nominal", "measured", "deviation", "tolmin", "tolmax"]
             list = xmlParser.ParseXML(received, "property", "none", taglist)
             for items in list:
@@ -258,32 +270,59 @@ class Window(Frame):
             widget.destroy()
         widget = event.widget
         selection = widget.curselection()
-        value = widget.get(selection[0])
-        self.objectDetails(self.parsedList.index(value))
+        self.selectedObject = widget.get(selection[0])
+        self.objectDetails(self.parsedList.index(self.selectedObject))
 
     def objectDetails(self, num):
         sender = "<Inspect_Object_Info id=\"" + str(num) + "\" />\n"
-        received = handleCommand.sendCommand(self, sender)
-
+        received = handleCommand.sendCommand(self, sender, False)
         taglist = ["name", "nominal", "measured", "deviation", "tolmin", "tolmax"]
         self.objectList = xmlParser.ParseXML(received, "property", "none", taglist)
-        self.img = PhotoImage(file="sizeicon.png")
-        resultsbtn = Button(self, command=self.showResults, image=self.img, height=20, width=20)
-        resultsbtn.image = self.img
-        resultsbtn.place(x=5, y=580)
-        resultsTip = Balloon()
-        resultsTip.bind_widget(resultsbtn, balloonmsg="Expand Results")
-        self.placeResults()
+        self.placeResults(num)
 
-    def placeResults(self):
+    def checkMeasure(self):
+        planid = str(self.Plans.index(self.selected.get()))
+        send = "<Inspect_Plan_Info id=\"" + planid + "\"/>\n"
+        receive = handleCommand.sendCommand(self, send, False)
+        if "run_state=\"1\"" in receive:
+            self.runstate = True
+            self.measuring = True
+        else:
+            self.runstate = False
+            if self.measuring == True:
+                print("You finished measuring something!")
+                t1 = threading.Thread(target=self.refresh_dataFrame)
+                t1.start()
+        self.dataFrame.after(1000, self.checkMeasure)
+
+    def refresh_dataFrame(self):
+        self.measuring = False
+        send = "<Object_List />\n"
+        rec = handleCommand.sendCommand(self, send, True)
+        names = []
+        objinfo = xmlParser.ParseXML(rec, "object", "object", names)
+        for widget in self.dataFrame.winfo_children():
+            widget.destroy()
+        objectIndex = self.parsedList.index(objinfo[-1])
+        self.objectDetails(objectIndex)
+        if self.isOOT == True:
+            self.listboxFrame.objects.itemconfig(objectIndex, bg="red")
+        else:
+            self.listboxFrame.objects.itemconfig(objectIndex, bg="green")
+
+
+    def placeResults(self, num):
 
         frameName = self.dataFrame
         xpad = 40
         ypad = 5
         fontsize = 10
 
+
         self.font1 = font.Font(self.master, family="Helvetica", size=fontsize, weight="bold")
-        actual = Label(frameName, text="Act", font=self.font1)
+        name = Label(frameName, text=self.parsedList[num], font=self.font1)
+        name.grid(row=0,column=0, padx=xpad, sticky=W)
+        actual = Label(frameName, text="Nom", font=self.font1)
         actual.grid(row=0, column=1, padx=xpad)
         meas = Label(frameName, text="Meas", font=self.font1)
         meas.grid(row=0, column=2, padx=xpad)
@@ -295,7 +334,6 @@ class Window(Frame):
         self.isOOT = False
         rows = 1
         # generates values to display
-        print(self.objectList)
         labels={}
         for items in self.objectList:
             nameLabel = Label(frameName, text=items['name'], font=self.font1)
@@ -316,12 +354,11 @@ class Window(Frame):
             measLabel.grid(row=rows, column=2, padx=xpad, pady=ypad, sticky=W)
 
             labelList=[]
-            labelList.append(nomLabel)
-            labelList.append(devLabel)
             labelList.append(measLabel)
-            labels.update( { items['name']: labelList } )
+            labelList.append(devLabel)
+            labels.update({items['name']: labelList})
             rows += 1
-
+        self.currentObject = labels
 
 
     def showResults(self):
@@ -332,7 +369,7 @@ class Window(Frame):
             self.top.grid_rowconfigure(x, weight=1)
             self.top.grid_columnconfigure(x, weight=1)
         # Default headers for information
-        actual = Label(self.top, text="Act", font=self.font)
+        actual = Label(self.top, text="Nom", font=self.font)
         actual.grid(row=0, column=1, padx=100, sticky=W)
         meas = Label(self.top, text="Meas", font=self.font)
         meas.grid(row=0, column=2, padx=100, sticky=W)
@@ -344,6 +381,7 @@ class Window(Frame):
 
         rows = 1
         # generates values to display
+        label_list=[]
         for items in self.objectList:
             nameLabel = Label(self.top, text=items['name'], font=self.font)
             nameLabel.grid(row=rows, column=0, padx=40, pady=20, sticky=W)
@@ -358,8 +396,10 @@ class Window(Frame):
             else:
                 measLabel = Label(self.top, text="{:.3f}".format(items['measured']), font=self.font, fg=inTol)
             measLabel.grid(row=rows, column=2, padx=100, pady=20, sticky=W)
-
             rows += 1
+            label_list.append(measLabel)
+            label_list.append(devLabel)
+            # CHECK HERE - FINISH UPDATING RRO FUNCTION
 
         self.update()
         self.top.bind('<Configure>', self.resize)

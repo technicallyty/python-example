@@ -9,7 +9,7 @@ import socket
 # Returns the string.
 # -----------------------------
 
-def sendCommand(object, msg):
+def sendCommand(object, msg, shouldWrite):
     object.SOCK.send(msg.encode('ascii'))
     newmsg = object.SOCK.recv(10000)
     if "acknowledgement" in (newmsg.decode('ascii')):
@@ -18,7 +18,8 @@ def sendCommand(object, msg):
     else:
         newmsg = newmsg.decode('ascii')
 
-    writeFiles(object, newmsg)
+    if shouldWrite == True:
+        writeFiles(object, newmsg)
     return newmsg
 
 
