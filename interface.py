@@ -36,17 +36,17 @@ class Window(Frame):
         self.myFile = None                              # temp save xml
         self.tempFile = open("xmltempdata.xml", 'w')    # temporary pre-save XML dump
         self.SOCK = None        # socket object. initialized upon connect()
-        self.Connected = False  # Sets during connection/disconnection
+        self.connected = False  # Sets during connection/disconnection
         self.isSaved = False    # helper bool to see if file has been saved yet
         self.runstate = False   # helps determine if something was measured
         self.measuring = False  # ^
         self.currentObject = [] # list of labels containing the currently placed data
-        self.selectedObject = None
-        self.objectList = []
-        self.current_RRO = []
-        self.top = None
+        self.selectedObject = None # Currently selected object
+        self.objectList = []       # List of objects in plan
+        self.current_RRO = []      # Current objects in the RRO window
+        self.top = None            # Toplevel window for RRO
 
-    # main window objects
+    # initial widgets for main window
     def window(self):
         self.master.title("Tyler's App")
         self.pack(fill=BOTH, expand=True)
@@ -54,7 +54,7 @@ class Window(Frame):
         global machineName
         Label(text=("Machine: " + machineName)).place(x=650)
 
-        # connect button, triggers Connect function
+
         self.connectButton = Button(self, text="Connect", command=self.connect, height=2, width=10)
         self.connectButton.place(x=340, y=640)
 
@@ -65,27 +65,31 @@ class Window(Frame):
         file.add_command(label="Export XML", command=self.saveas)
         file.add_command(label="Quit", command=self.exit_client)
         menu.add_cascade(label="File", menu=file)
-        #Button(self, text="test", command= lambda: print(handleCommand.sendCommand(self, "<Object_List />\n"))).place(x=300,y=300)
+
 
     def exit_client(self):
         self.master.destroy()
 
-    # Creates XML file to write Verisurf Responses
+    # Handles saving of files
     def saveas(self):
         fileTypes = [('XML Files', '*.xml')]
         file = filedialog.asksaveasfile(mode='a', filetypes=fileTypes, defaultextension=fileTypes)
+
+        # handles the case is no file is saved
         if file == None:
             return
+
+        # if file has not been saved yet, create one, delete temp file
         if self.isSaved == False:
             self.myFile = open(file.name, "w+")
             self.tempFile.close()
             self.myFile.close()
             copyfile('xmltempdata.xml', file.name)
             self.isSaved = True
-            # os.remove(self.tempFile)
             self.myFile = open(file.name, "a")
-            base = os.path.basename(self.tempFile.name)
-            os.remove(base)
+            tempxml = os.path.basename(self.tempFile.name)
+            os.remove(tempxml)
+        # file has been saved, so copy contents to new file
         else:
             self.myFile.close()
             tempcopy = open(file.name, "w+")
@@ -93,24 +97,24 @@ class Window(Frame):
             copyfile(self.myFile.name, file.name)
             self.myFile = open(file.name, "a")
 
-    # Connects to Verisurf.
+    # Connects to Verisurf/Disconnect clears widgets
     def connect(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         global ipnum
         host = ipnum
         port = 33666
         try:
-            if self.Connected == False:
+            if self.connected == False:
                 s.connect((host, port))
                 self.SOCK = s
                 tm = s.recv(1024)
                 self.tm = tm.decode('ascii')
                 handleCommand.writeFiles(self, self.tm)
-                self.Connected = True
+                self.connected = True
                 self.connectButton.configure(text="Disconnect")
                 self.layOut()
             else:
-                self.Connected = False
+                self.connected = False
                 self.SOCK.close()
                 self.connectButton.configure(text="Connect")
                 for widget in self.listboxFrame.winfo_children():
@@ -118,8 +122,10 @@ class Window(Frame):
                 for widget in self.dataFrame.winfo_children():
                     widget.destroy()
         except ConnectionError:
-            self.Connected = False
+            self.connected = False
+            showinfo("Error", "Could not connect to Verisurf. \n Please check settings and try again.")
 
+    # laysout all widgets once connected
     def layOut(self):
         self.getPlans()
         self.objType = StringVar()
@@ -181,10 +187,10 @@ class Window(Frame):
         Label(text="Active Plan").place(x=0, y=50)
         sender = "<Inspect_Plan_List />\n"
         received = handleCommand.sendCommand(self, sender, True)
-        try:
-            self.Plans = xmlParser.ParseXML(received, "plan", "id", None)
-        except:
-            self.Plans = ['No Plans']
+        self.Plans = xmlParser.ParseXML(received, "plan", "id", None)
+
+        if len(self.Plans)== 0:
+            self.Plans.append("No Plans")
 
         # CREATE DROP DOWN
         self.selected = StringVar()
@@ -278,7 +284,7 @@ class Window(Frame):
         self.placeResults(num)
 
     def checkMeasure(self):
-        if self.Connected == True:
+        if self.connected == True:
             planid = str(self.Plans.index(self.selected.get()))
             send = "<Inspect_Plan_Info id=\"" + planid + "\"/>\n"
             receive = handleCommand.sendCommand(self, send, False)

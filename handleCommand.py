@@ -10,7 +10,7 @@ import socket
 # -----------------------------
 
 def sendCommand(object, msg, shouldWrite):
-    if object.Connected == True:
+    if object.connected == True:
         object.SOCK.send(msg.encode('ascii'))
         newmsg = object.SOCK.recv(10000)
         if "acknowledgement" in (newmsg.decode('ascii')):

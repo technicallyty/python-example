@@ -24,7 +24,6 @@ def dispDevice(object):
 
     global taglist
     data = xmlParser.ParseXML(rmsg, "device_info", "none", taglist)
-    print(data)
     # set up interface
     object.font1 = font.Font(object.master, family="Helvetica", size=10, weight="bold")
     object.topwin = Toplevel(master=None, relief="sunken")
@@ -79,7 +78,6 @@ def dispDevice(object):
 
     object.update()
     object.topwin.bind('<Configure>', object.resize_top)
-    print(data)
     placeValues(object, data, format, label_list)
     object.topwin.after(5, lambda: refresh_window(object, format, label_list))
 
