@@ -17,6 +17,8 @@ def dispDevice(object):
     # get data
     msg = "<Build />\n"
     rmsg = handleCommand.sendCommand(object, msg, True)
+    if rmsg == None:
+        return
     msg = "<Device_Info id=\"1\" />\n"
     rmsg = handleCommand.sendCommand(object, msg, True)
 
@@ -26,6 +28,7 @@ def dispDevice(object):
     # set up interface
     object.font1 = font.Font(object.master, family="Helvetica", size=10, weight="bold")
     object.topwin = Toplevel(master=None, relief="sunken")
+    object.topwin.title("Device Read Out")
     for x in range(0, 5):
         object.topwin.grid_rowconfigure(x, weight=1)
         object.topwin.grid_columnconfigure(x, weight=1)

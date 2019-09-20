@@ -10,17 +10,18 @@ import socket
 # -----------------------------
 
 def sendCommand(object, msg, shouldWrite):
-    object.SOCK.send(msg.encode('ascii'))
-    newmsg = object.SOCK.recv(10000)
-    if "acknowledgement" in (newmsg.decode('ascii')):
+    if object.Connected == True:
+        object.SOCK.send(msg.encode('ascii'))
         newmsg = object.SOCK.recv(10000)
-        newmsg = newmsg.decode('ascii')
-    else:
-        newmsg = newmsg.decode('ascii')
+        if "acknowledgement" in (newmsg.decode('ascii')):
+            newmsg = object.SOCK.recv(10000)
+            newmsg = newmsg.decode('ascii')
+        else:
+            newmsg = newmsg.decode('ascii')
 
-    if shouldWrite == True:
-        writeFiles(object, newmsg)
-    return newmsg
+        if shouldWrite == True:
+            writeFiles(object, newmsg)
+        return newmsg
 
 
 

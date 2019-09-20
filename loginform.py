@@ -33,7 +33,7 @@ class LogInForm(Frame):
 
     # main window objects
     def LogInForm(self):
-        self.master.title("Log In Form")
+        self.master.title("Connect To Form")
         Label(text="Machine:").pack()
         Entry(textvariable = self.machine).pack()
         Label(text="Username:").pack()

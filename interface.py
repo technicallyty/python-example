@@ -11,8 +11,6 @@ import DRO
 import handleCommand
 import threading
 
-
-
 # --------------------------
 # Main GUI code
 # Handles placement of front end objects
@@ -26,24 +24,27 @@ import threading
 class Window(Frame):
     # Constructor//Globals
     def __init__(self, master=None):
-        Frame.__init__(self, master) # FRAMES \
+        Frame.__init__(self, master) # /FRAMES
         self.listboxFrame = Frame(self, width=200, height=400)
         self.listboxFrame.pack(side=LEFT)
         self.dataFrame = Frame(self, width=590, height=400)
         self.dataFrame.pack(pady=125)
         self.msmtFrame = Frame(self, width=100, height=100, relief='groove')
-        self.msmtFrame.place(x=600, y=550) # FRAMES^
+        self.msmtFrame.place(x=600, y=550) # FRAMES\
         self.master = master
         self.window()
         self.myFile = None                              # temp save xml
         self.tempFile = open("xmltempdata.xml", 'w')    # temporary pre-save XML dump
         self.SOCK = None        # socket object. initialized upon connect()
-        self.Connected = False
+        self.Connected = False  # Sets during connection/disconnection
         self.isSaved = False    # helper bool to see if file has been saved yet
-        self.runstate = False
-        self.measuring = False
-        self.currentObject = []
+        self.runstate = False   # helps determine if something was measured
+        self.measuring = False  # ^
+        self.currentObject = [] # list of labels containing the currently placed data
         self.selectedObject = None
+        self.objectList = []
+        self.current_RRO = []
+        self.top = None
 
     # main window objects
     def window(self):
@@ -73,29 +74,24 @@ class Window(Frame):
     def saveas(self):
         fileTypes = [('XML Files', '*.xml')]
         file = filedialog.asksaveasfile(mode='a', filetypes=fileTypes, defaultextension=fileTypes)
-        try:
-            self.lbl.configure(text="File path: " + file.name)
-
-            if self.isSaved == False:
-                self.myFile = open(file.name, "w+")
-                self.tempFile.close()
-                self.myFile.close()
-                copyfile('xmltempdata.xml', file.name)
-                self.isSaved = True
-                # os.remove(self.tempFile)
-                self.myFile = open(file.name, "a")
-                base = os.path.basename(self.tempFile.name)
-                os.remove(base)
-            else:
-                self.myFile.close()
-                tempcopy = open(file.name, "w+")
-                tempcopy.close()
-                copyfile(self.myFile.name, file.name)
-                self.myFile = open(file.name, "a")
-
-        except AttributeError:
-            None
-            # do nothing, file was not saved.
+        if file == None:
+            return
+        if self.isSaved == False:
+            self.myFile = open(file.name, "w+")
+            self.tempFile.close()
+            self.myFile.close()
+            copyfile('xmltempdata.xml', file.name)
+            self.isSaved = True
+            # os.remove(self.tempFile)
+            self.myFile = open(file.name, "a")
+            base = os.path.basename(self.tempFile.name)
+            os.remove(base)
+        else:
+            self.myFile.close()
+            tempcopy = open(file.name, "w+")
+            tempcopy.close()
+            copyfile(self.myFile.name, file.name)
+            self.myFile = open(file.name, "a")
 
     # Connects to Verisurf.
     def connect(self):
@@ -128,7 +124,8 @@ class Window(Frame):
         self.getPlans()
         self.objType = StringVar()
         self.msmtFrameLayout()
-        Button(self, text="DRO", command=lambda: DRO.dispDevice(self)).place(x=50, y=585)
+        Button(self, text="DRO", command=lambda: DRO.dispDevice(self)).place(x=50, y=575)
+
         t2 = threading.Thread(target=self.checkMeasure)
         self.dataFrame.after(0, t2.start())
         self.img = PhotoImage(file="sizeicon.png")
@@ -270,7 +267,7 @@ class Window(Frame):
             widget.destroy()
         widget = event.widget
         selection = widget.curselection()
-        self.selectedObject = widget.get(selection[0])
+        self.selectedObject = widget.get(selection)
         self.objectDetails(self.parsedList.index(self.selectedObject))
 
     def objectDetails(self, num):
@@ -281,19 +278,19 @@ class Window(Frame):
         self.placeResults(num)
 
     def checkMeasure(self):
-        planid = str(self.Plans.index(self.selected.get()))
-        send = "<Inspect_Plan_Info id=\"" + planid + "\"/>\n"
-        receive = handleCommand.sendCommand(self, send, False)
-        if "run_state=\"1\"" in receive:
-            self.runstate = True
-            self.measuring = True
-        else:
-            self.runstate = False
-            if self.measuring == True:
-                print("You finished measuring something!")
-                t1 = threading.Thread(target=self.refresh_dataFrame)
-                t1.start()
-        self.dataFrame.after(1000, self.checkMeasure)
+        if self.Connected == True:
+            planid = str(self.Plans.index(self.selected.get()))
+            send = "<Inspect_Plan_Info id=\"" + planid + "\"/>\n"
+            receive = handleCommand.sendCommand(self, send, False)
+            if "run_state=\"1\"" in receive:
+                self.runstate = True
+                self.measuring = True
+            else:
+                self.runstate = False
+                if self.measuring == True:
+                    t1 = threading.Thread(target=self.refresh_dataFrame)
+                    t1.start()
+            self.dataFrame.after(1000, self.checkMeasure)
 
     def refresh_dataFrame(self):
         self.measuring = False
@@ -309,6 +306,39 @@ class Window(Frame):
             self.listboxFrame.objects.itemconfig(objectIndex, bg="red")
         else:
             self.listboxFrame.objects.itemconfig(objectIndex, bg="green")
+
+        self.listboxFrame.objects.selection_clear(0, END)
+        self.listboxFrame.objects.selection_set(objectIndex)
+        self.listboxFrame.objects.activate(objectIndex)
+
+        try:
+            if self.top.winfo_exists():
+                if objinfo[-1] != objinfo[-2]:
+                    for widget in self.top.winfo_children():
+                        widget.destroy()
+                    self.showResults()
+                else:
+                    self.update_rro()
+        except AttributeError:
+            #do nothing, no window
+            None
+
+    def update_rro(self):
+        i = 0
+        j = 1
+        item = 0
+        while item != len(self.objectList):
+            meas = self.current_RRO[i]
+            dev = self.current_RRO[j]
+            obj = self.objectList[item]
+
+            meas.configure(text="{:.3f}".format(obj['measured']))
+            dev.configure(text="{:.3f}".format(obj['deviation']))
+
+            i += 2
+            j += 2
+            item += 1
+
 
 
     def placeResults(self, num):
@@ -363,8 +393,10 @@ class Window(Frame):
 
     def showResults(self):
         self.font = font.Font(self.master, family="Helvetica", size=20, weight="bold")
+        if self.top == None or self.top.winfo_exists() == False:
+            self.top = Toplevel(master=None, height=750, width=750, relief="sunken")
+            self.top.title("Report Read-Out")
 
-        self.top = Toplevel(master=None, height=750, width=750, relief="sunken")
         for x in range(0, len(self.objectList)):
             self.top.grid_rowconfigure(x, weight=1)
             self.top.grid_columnconfigure(x, weight=1)
@@ -399,7 +431,8 @@ class Window(Frame):
             rows += 1
             label_list.append(measLabel)
             label_list.append(devLabel)
-            # CHECK HERE - FINISH UPDATING RRO FUNCTION
+
+        self.current_RRO = label_list
 
         self.update()
         self.top.bind('<Configure>', self.resize)
@@ -408,6 +441,8 @@ class Window(Frame):
     def resize(self, event):
         try:
             size = len(self.objectList) * 14
+            if size == 0:
+                size = 30
             self.font['size'] = int(((self.top.winfo_height() + self.top.winfo_width()) / size))
         except TclError:
             # do nothing
