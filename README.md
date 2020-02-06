@@ -1,2 +1,2 @@
 # python example
- Python example for Verisurf API
+Example usage of Verisurf API through a Python Tkinter GUI.
